@@ -1,3 +1,5 @@
-# Required for the ETL and database outputs
+# Runtime dependencies for the ETL pipeline and hosted dashboard
 pandas>=2.0,<4.0
 numpy>=1.24,<3.0
+streamlit>=1.35,<2.0
+plotly>=5.20,<7.0
