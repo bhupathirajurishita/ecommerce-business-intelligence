@@ -1,21 +1,132 @@
 from pathlib import Path
 import sqlite3
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "processed" / "olist_analytics.db"
+REPORTS = ROOT / "reports"
+
 st.set_page_config(page_title="Olist Business Intelligence", page_icon="📦", layout="wide")
 st.title("Olist E-Commerce Business Intelligence")
 st.caption("Historical marketplace data | Sep 2016–Oct 2018 | Descriptive analysis")
+
+
+def show_published_dashboard():
+    """Render from privacy-safe aggregate reports when the local database is unavailable."""
+    required = {
+        "metrics": "dashboard_metrics.csv",
+        "monthly": "monthly_sales.csv",
+        "categories": "category_sales.csv",
+        "states": "state_sales.csv",
+        "products": "top_products.csv",
+        "payments": "payment_methods.csv",
+        "reviews": "review_distribution.csv",
+        "delivery": "delivery_review.csv",
+        "category_delivery": "category_delivery.csv",
+    }
+    missing = [name for name in required.values() if not (REPORTS / name).exists()]
+    if missing:
+        st.error("Published summary files are missing: " + ", ".join(missing))
+        st.info("Run the project data preparation steps locally, then publish the aggregate reports.")
+        st.stop()
+
+    data = {key: pd.read_csv(REPORTS / filename) for key, filename in required.items()}
+    metrics = data["metrics"].iloc[0]
+    st.info(
+        "Showing the published aggregate dashboard. Detailed filters are available when the "
+        "processed database is present locally. Only summary data is needed for this hosted view."
+    )
+    k = st.columns(4)
+    k[0].metric("Product revenue", f"R$ {metrics.product_revenue:,.2f}")
+    k[1].metric("Delivered orders", f"{int(metrics.delivered_orders):,}")
+    k[2].metric("Average order value", f"R$ {metrics.average_order_value:,.2f}")
+    k[3].metric("Average review score", f"{metrics.average_order_review:.2f}/5")
+    st.caption("Revenue is item price only; freight and recorded payment value are separate measures.")
+
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["Executive Overview", "Sales Analytics", "Customer & Payments", "Delivery & Experience"]
+    )
+    with tab1:
+        a, b = st.columns(2)
+        monthly = data["monthly"].copy()
+        monthly["month"] = monthly["month"].astype(str)
+        a.plotly_chart(
+            px.line(monthly, x="month", y="product_revenue", markers=True,
+                    title="Monthly delivered product revenue"),
+            use_container_width=True,
+        )
+        b.plotly_chart(
+            px.bar(monthly, x="month", y="orders", title="Monthly delivered orders"),
+            use_container_width=True,
+        )
+        a, b = st.columns(2)
+        a.metric("Average delivery time", f"{metrics.average_delivery_days:.2f} days")
+        b.metric("Late delivery share", f"{metrics.late_delivery_rate:.1%}")
+    with tab2:
+        a, b = st.columns(2)
+        categories = data["categories"].sort_values("product_revenue", ascending=False)
+        a.plotly_chart(
+            px.bar(categories.head(15).sort_values("product_revenue"),
+                   x="product_revenue", y="category", orientation="h",
+                   title="Top categories by delivered product revenue"),
+            use_container_width=True,
+        )
+        b.plotly_chart(
+            px.bar(data["products"].head(15).sort_values("product_revenue"),
+                   x="product_revenue", y="product_id", orientation="h",
+                   hover_data=["category", "orders"], title="Top products by revenue"),
+            use_container_width=True,
+        )
+        st.dataframe(categories, use_container_width=True, hide_index=True)
+    with tab3:
+        a, b = st.columns(2)
+        states = data["states"].sort_values("product_revenue", ascending=False)
+        a.plotly_chart(
+            px.bar(states.head(15), x="state", y="product_revenue",
+                   title="Delivered product revenue by customer state"),
+            use_container_width=True,
+        )
+        b.plotly_chart(
+            px.bar(data["payments"], x="payment_type", y="recorded_payment_value",
+                   title="Recorded payment value by method"),
+            use_container_width=True,
+        )
+        st.caption("Payment value can include freight and may be split across records or methods.")
+    with tab4:
+        a, b = st.columns(2)
+        a.plotly_chart(
+            px.bar(data["delivery"], x="delivery_result", y="avg_review_score",
+                   title="Average review score by delivery result",
+                   hover_data=["orders"]),
+            use_container_width=True,
+        )
+        b.plotly_chart(
+            px.bar(data["reviews"], x="review_score", y="orders",
+                   title="Order-level review score distribution"),
+            use_container_width=True,
+        )
+        cat_delivery = data["category_delivery"].sort_values("avg_delivery_days")
+        st.plotly_chart(
+            px.bar(cat_delivery, x="avg_delivery_days", y="category", orientation="h",
+                   title="Average delivery time by category", hover_data=["orders"]),
+            use_container_width=True,
+        )
+
+
 if not DB.exists():
-    st.error("Processed data not found. Run `python python/data_cleaning.py` from the project root first.")
+    show_published_dashboard()
     st.stop()
+
+
 @st.cache_data
 def load(name):
     with sqlite3.connect(DB) as con:
         return pd.read_sql_query(f"SELECT * FROM {name}", con)
+
+
 orders = load("fact_orders")
 items = load("fact_order_items")
 customers = load("dim_customers")
@@ -113,7 +224,3 @@ pay_scope = payments[payments.order_id.astype(str).isin(orders_scope.order_id)]
 pay_summary = pay_scope.groupby("payment_type", as_index=False).agg(recorded_value=("payment_value", "sum"), payment_records=("order_id", "size"), avg_installments=("payment_installments", "mean"))
 st.plotly_chart(px.bar(pay_summary, x="payment_type", y="recorded_value", title="Recorded payment value by method"), use_container_width=True)
 st.dataframe(pay_summary, use_container_width=True, hide_index=True)
-
-
-
-
