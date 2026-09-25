@@ -1,0 +1,39 @@
+name: Daily progress
+description: Record real progress on the e-commerce BI dashboard
+title: "Daily progress: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this only after actual project or study work related to e-commerce BI dashboard. Your answers and this issue are public. The workflow archives the entry and closes the issue. Do not submit filler just to create a contribution.
+  - type: textarea
+    id: work
+    attributes:
+      label: What did you work on?
+      description: Name the specific project area or concept.
+      placeholder: "Example: a dashboard metric, data check, or fallback path."
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: What changed, did you test, or learn?
+      description: Describe the concrete work or learning from this session.
+      placeholder: "Example: validated a KPI against the available data or documented a real behavior."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or result
+      description: Include a file, test result, or concise factual observation.
+      placeholder: "Example: a real test result, changed file, or specific dashboard behavior you observed."
+    validations:
+      required: true
+  - type: textarea
+    id: next
+    attributes:
+      label: Next step
+      description: A useful follow-up, if you have one.
+    validations:
+      required: false
